@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Engineering KPI Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f4f3ef;
+      color: #1a1a18;
+      min-height: 100vh;
+      padding: 2rem 1.5rem 4rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #1a1a18; color: #e8e7e2; }
+    }
+
+    /* ── Layout ───────────────────────────────────────────────── */
+    .dashboard { max-width: 1100px; margin: 0 auto; }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .header-meta {
+      font-size: 11px;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: #888780;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      margin-bottom: 5px;
+    }
+    .header h1 { font-size: 22px; font-weight: 500; }
+
+    .period-group { display: flex; gap: 4px; }
+    .pb {
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 8px;
+      border: 0.5px solid #c0bfba;
+      background: transparent;
+      color: #888780;
+      cursor: pointer;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      transition: background .15s, color .15s;
+    }
+    .pb:hover { background: rgba(0,0,0,.05); }
+    .pb.act {
+      background: #e8e7e2;
+      color: #1a1a18;
+      border-color: #888780;
+    }
+    @media (prefers-color-scheme: dark) {
+      .pb { border-color: #444441; color: #888780; }
+      .pb:hover { background: rgba(255,255,255,.05); }
+      .pb.act { background: #2c2c2a; color: #e8e7e2; border-color: #888780; }
+    }
+
+    /* ── Section label ────────────────────────────────────────── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #888780;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    /* ── Metric cards ─────────────────────────────────────────── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 700px) {
+      .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .mc {
+      background: #eae9e4;
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      .mc { background: #2c2c2a; }
+    }
+    .mc-label { font-size: 12px; color: #888780; margin-bottom: 5px; }
+    .mc-value {
+      font-size: 22px;
+      font-weight: 500;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      margin-bottom: 7px;
+      line-height: 1.2;
+    }
+    .mc-unit { font-size: 12px; color: #888780; font-family: inherit; }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 9px;
+      border-radius: 4px;
+      font-weight: 400;
+    }
+    .badge-green { background: #C0DD97; color: #27500A; }
+    .badge-amber { background: #FAC775; color: #633806; }
+    .badge-red   { background: #F7C1C1; color: #791F1F; }
+    .badge-blue  { background: #B5D4F4; color: #0C447C; }
+
+    /* ── Chart cards ──────────────────────────────────────────── */
+    .charts-row {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 1.5rem;
+    }
+    .charts-row-main { grid-template-columns: minmax(0,1.65fr) minmax(0,1fr); }
+    .charts-row-half { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+    @media (max-width: 700px) {
+      .charts-row-main, .charts-row-half { grid-template-columns: 1fr; }
+    }
+    .ch {
+      background: #fff;
+      border: 0.5px solid #d3d1c7;
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      .ch { background: #222220; border-color: #3a3a37; }
+    }
+    .ch-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .ch-title { font-size: 14px; font-weight: 500; }
+    .ch-unit  { font-size: 11px; color: #888780; }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: #888780;
+    }
+    .legend span { display: flex; align-items: center; gap: 4px; }
+    .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+
+    .chart-wrap { position: relative; }
+
+    /* ── Footer ───────────────────────────────────────────────── */
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: #888780;
+      margin-top: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+<div class="dashboard">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       ██  CONFIGURATION — edit everything in this section  ██
+       ═══════════════════════════════════════════════════════════ -->
+  <script>
+  /* ──────────────────────────────────────────────────────────────
+     STEP 1 — HEADER
+  ────────────────────────────────────────────────────────────── */
+  const CONFIG = {
+    teamName:   "Product & Engineering",   // e.g. "Payments Team"
+    quarter:    "Q2 2025",                 // e.g. "Q3 2025"
+    lastUpdated: "Apr 10, 2025",           // e.g. "Jul 1, 2025"
+
+    /* ────────────────────────────────────────────────────────────
+       STEP 2 — DORA METRIC CARDS
+       badge options: "green" | "amber" | "red" | "blue"
+    ──────────────────────────────────────────────────────────── */
+    dora: [
+      { label: "Deployment frequency", value: "4.2",  unit: "/ day",      badge: "Elite",      badgeColor: "green" },
+      { label: "Lead time for changes", value: "2.1",  unit: "days",       badge: "High",       badgeColor: "green" },
+      { label: "Mean time to recovery", value: "45",   unit: "min",        badge: "Elite",      badgeColor: "green" },
+      { label: "Change failure rate",   value: "2.8",  unit: "%",          badge: "Elite",      badgeColor: "green" },
+    ],
+
+    /* ────────────────────────────────────────────────────────────
+       STEP 3 — QUALITY & RELIABILITY CARDS
+    ──────────────────────────────────────────────────────────── */
+    quality: [
+      { label: "Service uptime",    value: "99.94", unit: "%",          badge: "SLA met",   badgeColor: "green" },
+      { label: "P0 incidents (QTD)", value: "2",     unit: "incidents",  badge: "Watch",     badgeColor: "amber" },
+      { label: "Bug escape rate",   value: "1.3",   unit: "%",          badge: "On target", badgeColor: "green" },
+      { label: "PR cycle time",     value: "18.5",  unit: "hrs",        badge: "Improving", badgeColor: "amber" },
+    ],
+
+    /* ────────────────────────────────────────────────────────────
+       STEP 4 — TIME-SERIES DATA
+       All arrays must be the same length (13 entries = 13 weeks).
+       The period selector will slice from the end, so put the
+       MOST RECENT value LAST.
+    ──────────────────────────────────────────────────────────── */
+    weeks: ["W1","W2","W3","W4","W5","W6","W7","W8","W9","W10","W11","W12","W13"],
+
+    // Sprint velocity (story points)
+    sprintCompleted: [78, 83, 81, 86, 82, 76, 91, 88, 94, 87, 95, 89, 92],
+    sprintPlanned:   [85, 85, 87, 87, 87, 88, 90, 90, 90, 88, 90, 90, 90],
+
+    // Weekly deployment count
+    deployments: [18, 22, 20, 25, 21, 19, 28, 24, 29, 26, 31, 28, 32],
+
+    // PR cycle time (hours)
+    prCycleTime: [32, 30, 31, 28, 29, 27, 26, 25, 24, 22, 21, 20, 18.5],
+
+    /* ────────────────────────────────────────────────────────────
+       STEP 5 — OPEN BUGS BY SEVERITY (static snapshot)
+    ──────────────────────────────────────────────────────────── */
+    bugs: {
+      critical: 4,
+      high:     12,
+      medium:   28,
+      low:      47,
+    },
+  };
+  </script>
+  <!-- ═══════════════════════════════════════════════════════════
+       End of configuration
+       ═══════════════════════════════════════════════════════════ -->
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <p class="header-meta" id="header-meta"></p>
+      <h1 id="header-title"></h1>
+    </div>
+    <div class="period-group">
+      <button class="pb act" onclick="setPeriod(4,this)">4w</button>
+      <button class="pb" onclick="setPeriod(8,this)">8w</button>
+      <button class="pb" onclick="setPeriod(13,this)">13w</button>
+    </div>
+  </div>
+
+  <!-- DORA cards -->
+  <p class="section-label">DORA metrics</p>
+  <div class="cards-grid" id="dora-cards"></div>
+
+  <!-- Chart row 1: velocity + deployments -->
+  <div class="charts-row charts-row-main">
+    <div class="ch">
+      <div class="ch-header">
+        <span class="ch-title">Sprint velocity</span>
+        <span class="ch-unit">story points</span>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:#1D9E75"></span>Completed</span>
+        <span><span class="dot" id="planned-dot"></span>Planned</span>
+      </div>
+      <div class="chart-wrap" style="height:190px">
+        <canvas id="velocityChart" role="img" aria-label="Sprint velocity: completed vs planned story points">Sprint velocity chart.</canvas>
+      </div>
+    </div>
+    <div class="ch">
+      <div class="ch-header">
+        <span class="ch-title">Deployments / week</span>
+        <span class="ch-unit">count</span>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:#378ADD"></span>Deploys</span>
+      </div>
+      <div class="chart-wrap" style="height:190px">
+        <canvas id="deployChart" role="img" aria-label="Weekly deployment count">Deployments chart.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quality cards -->
+  <p class="section-label">Quality &amp; reliability</p>
+  <div class="cards-grid" id="quality-cards"></div>
+
+  <!-- Chart row 2: bugs + PR cycle time -->
+  <div class="charts-row charts-row-half">
+    <div class="ch">
+      <span class="ch-title" style="display:block;margin-bottom:8px">Open bugs by severity</span>
+      <div class="legend" id="bugs-legend"></div>
+      <div class="chart-wrap" style="height:150px">
+        <canvas id="bugsChart" role="img" aria-label="Open bugs by severity">Bugs chart.</canvas>
+      </div>
+    </div>
+    <div class="ch">
+      <div class="ch-header">
+        <span class="ch-title">PR cycle time trend</span>
+        <span class="ch-unit">hours</span>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:#7F77DD"></span>Avg hours</span>
+      </div>
+      <div class="chart-wrap" style="height:150px">
+        <canvas id="cycleChart" role="img" aria-label="PR cycle time trend">Cycle time chart.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <p class="footer" id="footer"></p>
+</div>
+
+<script>
+  /* ── Render header from config ───────────────────────────── */
+  document.getElementById('header-meta').textContent =
+    CONFIG.teamName + ' · ' + CONFIG.quarter;
+  document.getElementById('header-title').textContent =
+    'Engineering KPI Dashboard';
+  document.getElementById('footer').textContent =
+    'Last updated ' + CONFIG.lastUpdated + ' · Sample / demo data';
+
+  /* ── Render metric cards ─────────────────────────────────── */
+  function renderCards(containerId, items) {
+    const el = document.getElementById(containerId);
+    el.innerHTML = items.map(c => `
+      <div class="mc">
+        <p class="mc-label">${c.label}</p>
+        <p class="mc-value">${c.value}<span class="mc-unit"> ${c.unit}</span></p>
+        <span class="badge badge-${c.badgeColor}">${c.badge}</span>
+      </div>`).join('');
+  }
+  renderCards('dora-cards', CONFIG.dora);
+  renderCards('quality-cards', CONFIG.quality);
+
+  /* ── Bug legend ──────────────────────────────────────────── */
+  const bugColors = { critical:'#E24B4A', high:'#EF9F27', medium:'#85B7EB', low:'#B4B2A9' };
+  document.getElementById('bugs-legend').innerHTML =
+    Object.entries(CONFIG.bugs).map(([k,v]) =>
+      `<span><span class="dot" style="background:${bugColors[k]}"></span>${k.charAt(0).toUpperCase()+k.slice(1)} ${v}</span>`
+    ).join('');
+
+  /* ── Dark mode detection ─────────────────────────────────── */
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridC = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+  const tickC = '#888780';
+  const planC = dark ? '#4A4A47' : '#D3D1C7';
+  document.getElementById('planned-dot').style.background = planC;
+
+  /* ── Chart.js helpers ────────────────────────────────────── */
+  function scalesXY(yMin) {
+    const ax = {
+      grid: { color: gridC },
+      ticks: { color: tickC, font: { size: 11 } },
+      border: { display: false }
+    };
+    const ay = JSON.parse(JSON.stringify(ax));
+    if (yMin !== undefined) ay.min = yMin;
+    return { x: ax, y: ay };
+  }
+  const basePlugins = {
+    legend: { display: false },
+    tooltip: { mode: 'index', intersect: false }
+  };
+  function sl(arr, n) { return arr.slice(-n); }
+
+  /* ── Time-series charts (rebuilt on period change) ───────── */
+  let vChart, dChart, cChart;
+
+  function buildCharts(n) {
+    const w = sl(CONFIG.weeks, n);
+
+    vChart = new Chart(document.getElementById('velocityChart'), {
+      type: 'bar',
+      data: {
+        labels: w,
+        datasets: [
+          { label: 'Completed', data: sl(CONFIG.sprintCompleted, n), backgroundColor: '#1D9E75', borderRadius: 3 },
+          { label: 'Planned',   data: sl(CONFIG.sprintPlanned,   n), backgroundColor: planC,    borderRadius: 3 }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: basePlugins, scales: scalesXY(60) }
+    });
+
+    dChart = new Chart(document.getElementById('deployChart'), {
+      type: 'bar',
+      data: {
+        labels: w,
+        datasets: [{ label: 'Deployments', data: sl(CONFIG.deployments, n), backgroundColor: '#378ADD', borderRadius: 3 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: basePlugins, scales: scalesXY(0) }
+    });
+
+    cChart = new Chart(document.getElementById('cycleChart'), {
+      type: 'line',
+      data: {
+        labels: w,
+        datasets: [{
+          label: 'Hours',
+          data: sl(CONFIG.prCycleTime, n),
+          borderColor: '#7F77DD',
+          backgroundColor: 'rgba(127,119,221,0.08)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: '#7F77DD',
+          fill: true,
+          tension: 0.35
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: basePlugins, scales: scalesXY(0) }
+    });
+  }
+
+  /* ── Static bugs chart ───────────────────────────────────── */
+  new Chart(document.getElementById('bugsChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Critical', 'High', 'Medium', 'Low'],
+      datasets: [{
+        data: [CONFIG.bugs.critical, CONFIG.bugs.high, CONFIG.bugs.medium, CONFIG.bugs.low],
+        backgroundColor: [bugColors.critical, bugColors.high, bugColors.medium, bugColors.low],
+        borderRadius: 3
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.x + ' bugs' } }
+      },
+      scales: {
+        x: { grid: { color: gridC }, ticks: { color: tickC, font: { size: 11 } }, border: { display: false } },
+        y: { grid: { display: false }, ticks: { color: tickC, font: { size: 11 } }, border: { display: false } }
+      }
+    }
+  });
+
+  /* ── Period toggle ───────────────────────────────────────── */
+  function setPeriod(n, btn) {
+    document.querySelectorAll('.pb').forEach(b => b.classList.remove('act'));
+    btn.classList.add('act');
+    [vChart, dChart, cChart].forEach(c => c.destroy());
+    buildCharts(n);
+  }
+
+  buildCharts(4);
+</script>
+</body>
+</html>
